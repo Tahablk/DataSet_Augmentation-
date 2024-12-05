@@ -9,9 +9,9 @@ import json
 from PIL import Image
 
 # Paths
-input_folder = r"C:\Users\boula\PRAKTIKUMSIM2REAL\Practicum_sim2real\content\logs\collected_sim_no_obstacles"
-output_folder = r"C:\Users\boula\PRAKTIKUMSIM2REAL\Practicum_sim2real\DataSet_Augmentation\outputPNG"
-final_output_folder = r"C:\Users\boula\PRAKTIKUMSIM2REAL\Practicum_sim2real\DataSet_Augmentation\Correct_Format_Output"
+input_folder = r'C:\Users\boula\PRAKTIKUMSIM2REAL\Practicum_sim2real\content\logs\collected_sim_no_obstacles'
+output_folder = r'C:\Users\boula\PRAKTIKUMSIM2REAL\Practicum_sim2real\DataSet_Augmentation\BEFOREFILTER'
+final_output_folder = r'C:\Users\boula\PRAKTIKUMSIM2REAL\Practicum_sim2real\DataSet_Augmentation\FINALFOLDERDATA'
 
 # Conversion settings
 target_size = (320, 240)  # Match input size
@@ -24,6 +24,7 @@ os.makedirs(final_output_folder, exist_ok=True)
 
 # Perturbation Functions (Image)
 def gaussian_noise(scale, img):
+    """Apply Gaussian noise to an image."""
     mean = 0
     var = 10 * scale
     sigma = var ** 0.5
@@ -32,6 +33,7 @@ def gaussian_noise(scale, img):
     return noisy_image
 
 def motion_blur(scale, img):
+    """Apply motion blur to an image."""
     kernel_size = scale * 2 + 1
     kernel = np.zeros((kernel_size, kernel_size))
     kernel[int((kernel_size - 1) / 2), :] = np.ones(kernel_size)
@@ -39,16 +41,25 @@ def motion_blur(scale, img):
     blurred_image = cv2.filter2D(img, -1, kernel)
     return blurred_image
 
-def rotate_image(scale, img):
-    angle = [10, 20, 45, 90, 180][scale]
-    (h, w) = img.shape[:2]
-    center = (w // 2, h // 2)
-    matrix = cv2.getRotationMatrix2D(center, angle, 1.0)
-    rotated_image = cv2.warpAffine(img, matrix, (w, h))
-    return rotated_image
+def contrast(scale, img):
+    """Adjust contrast of an image."""
+    factor = [1.1, 1.2, 1.3, 1.5, 1.7][scale]
+    pivot = 127.5
+    return np.clip(pivot + (img - pivot) * factor, 0, 255).astype(np.uint8)
+
+def saturation_filter(scale, img):
+    """Adjust saturation of an image."""
+    multiplier = [1.05, 1.15, 1.4, 1.65, 1.9][scale]
+    hsv = cv2.cvtColor(img, cv2.COLOR_BGR2HSV)
+    hsv[:, :, 1] = np.clip(hsv[:, :, 1] * multiplier, 0, 255)
+    saturated = cv2.cvtColor(hsv, cv2.COLOR_HSV2BGR)
+    return saturated
 
 # Augment Images
 def augment_image(image_path, output_folder, name_mapping):
+    """
+    Applies selected augmentations to an image.
+    """
     image = cv2.imread(image_path)
     if image is None:
         raise FileNotFoundError(f"Unable to read image: {image_path}")
@@ -56,7 +67,8 @@ def augment_image(image_path, output_folder, name_mapping):
     perturbations = [
         ("gaussian_noise", gaussian_noise(2, image)),
         ("motion_blur", motion_blur(2, image)),
-        ("rotate", rotate_image(2, image))
+        ("contrast", contrast(2, image)),
+        ("saturation", saturation_filter(2, image))
     ]
 
     base_name = os.path.splitext(os.path.basename(image_path))[0]
@@ -66,8 +78,11 @@ def augment_image(image_path, output_folder, name_mapping):
         cv2.imwrite(augmented_image_path, perturbed_image)
         name_mapping[base_name + ".png"] = new_name
 
-# Copy and Update JSON
+# Copy and Update JSON Files
 def update_json_files(input_folder, output_folder, name_mapping):
+    """
+    Updates JSON files to reflect augmented image names.
+    """
     for root, _, files in os.walk(input_folder):
         for file in files:
             if file.lower().endswith('.json'):
@@ -94,6 +109,9 @@ def update_json_files(input_folder, output_folder, name_mapping):
 
 # Resize and Convert Images
 def resize_and_convert_images(input_folder, output_folder):
+    """
+    Resizes and converts images to the specified format.
+    """
     for root, _, files in os.walk(input_folder):
         for file in files:
             if file.lower().endswith(('.png', '.jpg', '.jpeg')):
@@ -110,6 +128,9 @@ def resize_and_convert_images(input_folder, output_folder):
 
 # Main Workflow
 def augment_and_prepare_dataset(input_folder, output_folder, final_output_folder):
+    """
+    Orchestrates the augmentation and preparation of the dataset.
+    """
     name_mapping = {}
 
     # Step 1: Augment Images
