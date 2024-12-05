@@ -1,25 +1,18 @@
 #ISSUE IN IMPORTING PERTURBATION FUNCTIONS
 #from PerturbationDrive.perturbationdrive.perturbationfuncs import (gaussian_noise, motion_blur, fog_filter, frost_filter, contrast, increase_brightness, rotate_image)
-# Import the functions from perturbationfuncs.py
-#import sys
-#sys.path.append(r"C:\Users\boula\PRAKTIKUMSIM2REAL\Practicum_sim2real\PerturbationDrive\perturbationdrive")
-#with open("PerturbationDrive\perturbationdrive\perturbationfuncs.py", 'r') as f:
- #   exec(f.read())
+
 
 import os
 import cv2
-import json
 import numpy as np
 
 import os
 import cv2
-import json
 import numpy as np
 
 # Perturbation Functions (Image and JSON)
 import os
 import cv2
-import json
 import numpy as np
 
 # Perturbation Functions (Image and JSON)
@@ -94,7 +87,9 @@ def augment_dataset_with_perturbations(input_folder, output_folder):
 input_folder = r"C:\Users\boula\PRAKTIKUMSIM2REAL\Practicum_sim2real\content\logs\collected_sim_no_obstacles"
 output_folder = r"C:\Users\boula\PRAKTIKUMSIM2REAL\Practicum_sim2real\DataSet_Augmentation\outputPNG"
 
-#augment_dataset_with_perturbations(input_folder, output_folder)
+augment_dataset_with_perturbations(input_folder, output_folder)
+
+#now this next part makes sure that the images are converted to the right size and format
 
 from PIL import Image
 import os
@@ -127,6 +122,7 @@ for filename in os.listdir(input_dir):
         output_path = os.path.join(output_dir, filename)
         img.save(output_path, format="PNG", dpi=target_dpi)
 
+#make sure to give a new output folder for conversion of images
 print(f"Converted images saved to {output_dir}")
 
 
