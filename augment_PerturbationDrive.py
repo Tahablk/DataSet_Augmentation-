@@ -95,16 +95,16 @@ from PIL import Image
 import os
 
 # Paths
-input_dir = "C:/Users/boula/PRAKTIKUMSIM2REAL/Practicum_sim2real/DataSet_Augmentation/outputPNG"
-output_dir = "C:/Users/boula/PRAKTIKUMSIM2REAL/Practicum_sim2real/DataSet_Augmentation/outputPNG-converted"
+input_dir = r'C:/Users/boula/PRAKTIKUMSIM2REAL/Practicum_sim2real/DataSet_Augmentation/outputPNG'
+output_dir = r'C:\Users\boula\PRAKTIKUMSIM2REAL\Practicum_sim2real\DataSet_Augmentation\Correct_Format_Output'
 
 # Ensure the output directory exists
 os.makedirs(output_dir, exist_ok=True)
 
 # Conversion settings
-target_size = (315, 265)  # Match input size
+target_size = (320, 240)  # Match input size
 target_mode = "RGBA"      # Match input mode
-target_dpi = (120, 120)   # Match input DPI
+target_dpi = (96, 96)   # Match input DPI
 
 # Process images
 for filename in os.listdir(input_dir):
