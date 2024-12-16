@@ -1,0 +1,154 @@
+import os
+import cv2
+import numpy as np
+import json
+import random
+
+# Paths
+input_folder = r'C:\Users\boula\PRAKTIKUMSIM2REAL\Practicum_sim2real\content\logs\collected_sim_no_obstacles'
+output_folder = r'C:\Users\boula\PRAKTIKUMSIM2REAL\Practicum_sim2real\DataSet_Augmentation\2.Training_Augmentation\Output_Folder_2.training'
+
+# Ensure output directory exists
+os.makedirs(output_folder, exist_ok=True)
+
+# Perturbation Functions
+
+def fog_filter(scale, img):
+    """Apply a fog effect."""
+    fog = np.random.normal(200, scale * 10, img.shape).astype('uint8')
+    return cv2.addWeighted(img, 0.7, fog, 0.3, 0)
+
+def frost_filter(scale, img):
+    """Simulate frost on the lens."""
+    frost_overlay = np.zeros_like(img, dtype='uint8')
+    frost_points = np.random.randint(0, img.shape[0], (scale * 50, 2))
+    for point in frost_points:
+        cv2.circle(frost_overlay, tuple(point), radius=scale * 2, color=(255, 255, 255), thickness=-1)
+    return cv2.addWeighted(img, 0.8, frost_overlay, 0.2, 0)
+
+def rain_effect(scale, img):
+    """Simulate rain streaks."""
+    rain = np.zeros_like(img, dtype='uint8')
+    num_drops = 100 * scale
+    for _ in range(num_drops):
+        x1, y1 = np.random.randint(0, img.shape[1]), np.random.randint(0, img.shape[0])
+        x2, y2 = x1 + np.random.randint(-5, 5), y1 + np.random.randint(10, 20)
+        cv2.line(rain, (x1, y1), (x2, y2), (200, 200, 200), 1)
+    return cv2.addWeighted(img, 0.8, rain, 0.2, 0)
+
+def lens_distortion(scale, img):
+    """Simulate lens distortion."""
+    height, width = img.shape[:2]
+    K = np.array([[width, 0, width / 2],
+                  [0, height, height / 2],
+                  [0, 0, 1]])
+    D = np.array([scale * -0.01, scale * 0.01, 0, 0])
+    return cv2.undistort(img, K, D)
+
+def camera_shake(scale, img):
+    """Simulate camera shake using affine transformations."""
+    height, width = img.shape[:2]
+    M = np.float32([[1, 0.1 * scale, 0], [0.1 * scale, 1, 0]])
+    return cv2.warpAffine(img, M, (width, height))
+
+def shadow_overlay(scale, img):
+    """Add shadows to simulate occlusions."""
+    shadow = np.zeros_like(img)
+    x1, y1 = np.random.randint(0, img.shape[1]), 0
+    x2, y2 = np.random.randint(0, img.shape[1]), img.shape[0]
+    cv2.rectangle(shadow, (x1, y1), (x2, y2), (50, 50, 50), -1)
+    return cv2.addWeighted(img, 0.8, shadow, 0.2, 0)
+
+def perspective_warp(scale, img):
+    """Apply a slight perspective warp."""
+    height, width = img.shape[:2]
+    src = np.float32([[0, 0], [width, 0], [0, height], [width, height]])
+    dst = src + np.random.uniform(-scale * 5, scale * 5, src.shape).astype(np.float32)
+    M = cv2.getPerspectiveTransform(src, dst)
+    return cv2.warpPerspective(img, M, (width, height))
+
+def increase_brightness(scale, img):
+    """Increase brightness."""
+    return np.clip(img + scale * 50, 0, 255).astype(np.uint8)
+
+# Augmentation Pipeline
+def augment_image(image_path, output_folder, name_mapping):
+    """
+    Applies randomized perturbations to an image.
+    """
+    image = cv2.imread(image_path)
+    if image is None:
+        raise FileNotFoundError(f"Unable to read image: {image_path}")
+
+    # Available perturbations
+    perturbations = [
+        ("fog", lambda img: fog_filter(random.randint(1, 3), img)),
+        ("frost", lambda img: frost_filter(random.randint(1, 3), img)),
+        ("rain", lambda img: rain_effect(random.randint(1, 3), img)),
+        ("lens_distortion", lambda img: lens_distortion(random.randint(1, 3), img)),
+        ("camera_shake", lambda img: camera_shake(random.randint(1, 3), img)),
+        ("shadow", lambda img: shadow_overlay(random.randint(1, 3), img)),
+        ("perspective", lambda img: perspective_warp(random.randint(1, 3), img)),
+        ("brightness", lambda img: increase_brightness(random.randint(1, 3), img))
+    ]
+
+    # Randomly select a subset of perturbations
+    selected_perturbations = random.sample(perturbations, k=random.randint(3, 5))
+
+    base_name = os.path.splitext(os.path.basename(image_path))[0]
+    for suffix, perturbation in selected_perturbations:
+        perturbed_image = perturbation(image)
+        new_name = f"{base_name}_{suffix}.png"
+        augmented_image_path = os.path.join(output_folder, new_name)
+        cv2.imwrite(augmented_image_path, perturbed_image)
+        name_mapping[base_name + ".png"] = new_name
+
+# Copy and Update JSON Files
+def update_json_files(input_folder, output_folder, name_mapping):
+    """
+    Updates JSON files with augmented image names.
+    """
+    for root, _, files in os.walk(input_folder):
+        for file in files:
+            if file.lower().endswith('.json'):
+                input_json_path = os.path.join(root, file)
+                output_json_path = os.path.join(output_folder, file)
+
+                # Load and update JSON
+                with open(input_json_path, 'r') as f:
+                    data = json.load(f)
+
+                if isinstance(data, dict):
+                    for key, value in data.items():
+                        if value in name_mapping:
+                            data[key] = name_mapping[value]
+                elif isinstance(data, list):
+                    data = [name_mapping.get(item, item) for item in data]
+
+                with open(output_json_path, 'w') as f:
+                    json.dump(data, f, indent=4)
+
+                print(f"Updated JSON file: {output_json_path}")
+
+# Main Workflow
+def augment_and_prepare_dataset(input_folder, output_folder):
+    """
+    Main orchestration of the dataset augmentation pipeline.
+    """
+    name_mapping = {}
+
+    # Step 1: Augment Images
+    for root, _, files in os.walk(input_folder):
+        for file in files:
+            if file.lower().endswith(('.png', '.jpg', '.jpeg')):
+                image_path = os.path.join(root, file)
+                print(f"Augmenting image: {image_path}")
+                augment_image(image_path, output_folder, name_mapping)
+
+    # Step 2: Update JSON Files
+    update_json_files(input_folder, output_folder, name_mapping)
+
+    print(f"Final dataset prepared in: {output_folder}")
+
+# Run the Workflow
+augment_and_prepare_dataset(input_folder, output_folder)
