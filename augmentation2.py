@@ -45,8 +45,85 @@ def defocus_blur(scale, img):
     kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (factor, factor))
     return clamp_and_convert(cv2.filter2D(img, -1, kernel))
 
-# ... (Include other perturbation functions here as in your current script)
+def glass_blur(scale, img):
+    factor = [2, 5, 6, 9, 12][scale]
+    height, width = img.shape[:2]
+    for _ in range(factor):
+        rand_x = np.clip(np.random.randint(-1, 2, (height, width)) + np.arange(width), 0, width - 1)
+        rand_y = np.clip(np.random.randint(-1, 2, (height, width)) + np.arange(height)[:, None], 0, height - 1)
+        img = img[rand_y, rand_x]
+    return img
 
+def motion_blur(scale, img):
+    size = [2, 4, 6, 8, 10][scale]
+    kernel = np.zeros((size, size))
+    kernel[int(size / 2), :] = np.ones(size)
+    kernel = kernel / size
+    return clamp_and_convert(cv2.filter2D(img, -1, kernel))
+
+def zoom_blur(scale, img):
+    scale_factors = [1.01, 1.1, 1.2, 1.3, 1.4][scale]
+    zoomed = cv2.resize(img, None, fx=scale_factors, fy=scale_factors, interpolation=cv2.INTER_LINEAR)
+    center = tuple(np.array(zoomed.shape[:2]) // 2)
+    crop = tuple(np.array(img.shape[:2]) // 2)
+    return zoomed[center[0] - crop[0]:center[0] + crop[0], center[1] - crop[1]:center[1] + crop[1]]
+
+def increase_brightness(scale, img):
+    factor = [1.1, 1.2, 1.3, 1.5, 1.7][scale]
+    hsv = cv2.cvtColor(img, cv2.COLOR_BGR2HSV)
+    hsv[:, :, 2] = np.clip(hsv[:, :, 2] * factor, 0, 255)
+    return cv2.cvtColor(hsv, cv2.COLOR_HSV2BGR)
+
+def contrast(scale, img):
+    factor = [1.1, 1.2, 1.3, 1.5, 1.7][scale]
+    pivot = 127.5
+    return clamp_and_convert(pivot + (img - pivot) * factor)
+
+def pixelate(scale, img):
+    factor = [0.85, 0.55, 0.35, 0.2, 0.1][scale]
+    h, w = img.shape[:2]
+    temp = cv2.resize(img, (int(w * factor), int(h * factor)), interpolation=cv2.INTER_AREA)
+    return cv2.resize(temp, (w, h), interpolation=cv2.INTER_NEAREST)
+
+def jpeg_filter(scale, img):
+    quality = [95, 75, 50, 30, 10][scale]
+    _, encoded = cv2.imencode('.jpg', img, [int(cv2.IMWRITE_JPEG_QUALITY), quality])
+    return cv2.imdecode(encoded, cv2.IMREAD_COLOR)
+
+def elastic(scale, img):
+    alpha, sigma = [(2, 0.4), (3, 0.75), (5, 0.9), (7, 1.2), (10, 1.5)][scale]
+    dx = cv2.GaussianBlur((np.random.rand(*img.shape[:2]) * 2 - 1) * alpha, (7, 7), sigma)
+    dy = cv2.GaussianBlur((np.random.rand(*img.shape[:2]) * 2 - 1) * alpha, (7, 7), sigma)
+    x, y = np.meshgrid(np.arange(img.shape[1]), np.arange(img.shape[0]))
+    map_x = (x + dx).astype(np.float32)
+    map_y = (y + dy).astype(np.float32)
+    return cv2.remap(img, map_x, map_y, interpolation=cv2.INTER_LINEAR, borderMode=cv2.BORDER_REFLECT)
+
+def shear_image(scale, img):
+    shear_factor = [0.1, 0.2, 0.3, 0.4, 0.5][scale]
+    M = np.array([[1, shear_factor, 0], [0, 1, 0]], dtype=np.float32)
+    return clamp_and_convert(cv2.warpAffine(img, M, (img.shape[1], img.shape[0])))
+
+def grayscale_filter(scale, img):
+    severity = [0.1, 0.2, 0.3, 0.4, 0.5][scale]
+    gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+    gray_rgb = cv2.cvtColor(gray, cv2.COLOR_GRAY2BGR)
+    return cv2.addWeighted(img, 1 - severity, gray_rgb, severity, 0)
+
+# Validation Function
+def is_valid_image(img, min_threshold=10, max_threshold=245):
+    mean_intensity = np.mean(img)
+    std_deviation = np.std(img)
+
+    # Check for black or white images
+    if mean_intensity < min_threshold or mean_intensity > max_threshold:
+        return False
+
+    # Check for nonsensical images
+    if std_deviation < min_threshold:
+        return False
+
+    return True
 # Validation Function
 def is_valid_image(img, min_threshold=10, max_threshold=245):
     """
