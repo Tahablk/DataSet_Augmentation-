@@ -153,7 +153,9 @@ def augment_images_with_json(input_folder, output_folder, json_record_path):
                     continue
                 
                 img = clamp_and_convert(img)  # Ensure uint8 format
-                selected = random.sample(perturbations, random.randint(3, 5))
+
+                # Sample perturbations without exceeding the available options
+                selected = random.sample(perturbations, min(random.randint(3, 5), len(perturbations)))
                 augmented_files = []
 
                 for perturbation in selected:
@@ -182,3 +184,4 @@ def augment_images_with_json(input_folder, output_folder, json_record_path):
 
 # Run the Augmentation
 augment_images_with_json(input_folder, output_folder, json_record_path)
+
