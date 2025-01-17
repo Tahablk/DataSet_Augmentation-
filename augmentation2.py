@@ -3,11 +3,15 @@ import cv2
 import numpy as np
 import random
 
-# Paths (PLEASE CHANGE THE OUTPUT PATH to a path of your output folder)
+# Paths (Ensure these paths are valid on your system)
 input_folder = r'C:\Users\boula\PRAKTIKUMSIM2REAL\Practicum_sim2real\content\logs\collected_sim_no_obstacles'  
-output_folder = r'C:\Users\boula\PRAKTIKUMSIM2REAL\Practicum_sim2real\DataSet_Augmentation\2.Training_Augmentation\output-Folder2'  
+output_folder = r'C:\Users\boula\PRAKTIKUMSIM2REAL\Practicum_sim2real\DataSet_Augmentation\2.Training_Augmentation\outputCORRECT'  
 
-# only to ensure the output directory exists
+# Ensure the input folder exists
+if not os.path.exists(input_folder):
+    raise FileNotFoundError(f"Input folder does not exist: {input_folder}")
+
+# Ensure the output directory exists or create it
 os.makedirs(output_folder, exist_ok=True)
 
 # Helper Function to Clamp and Convert
@@ -110,30 +114,17 @@ def grayscale_filter(scale, img):
 
 # Validation Function
 def is_valid_image(img, min_threshold=10, max_threshold=245):
-    """
-    Validates the augmented image to ensure it is not black, white, or unusable.
-    - img: Input image (numpy array).
-    - min_threshold: Minimum mean intensity for a valid image.
-    - max_threshold: Maximum mean intensity for a valid image.
-    Returns:
-        - bool: True if the image is valid, False otherwise.
-    """
     mean_intensity = np.mean(img)
     std_deviation = np.std(img)
 
-    # Check for black images (low mean intensity)
-    if mean_intensity < min_threshold:
+    # Check for black or white images
+    if mean_intensity < min_threshold or mean_intensity > max_threshold:
         return False
 
-    # Check for white images (high mean intensity)
-    if mean_intensity > max_threshold:
-        return False
-
-    # Check for nonsensical images (low variation)
+    # Check for nonsensical images
     if std_deviation < min_threshold:
         return False
 
-    # Image is valid
     return True
 
 # Augmentation Pipeline
@@ -169,4 +160,3 @@ def augment_images(input_folder, output_folder):
 
 # Run the Augmentation
 augment_images(input_folder, output_folder)
-
