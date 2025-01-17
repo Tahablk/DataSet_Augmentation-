@@ -6,7 +6,7 @@ import json
 
 # Paths
 input_folder = r'C:\Users\boula\PRAKTIKUMSIM2REAL\Practicum_sim2real\content\logs\collected_sim_no_obstacles'  
-output_folder = r'C:\Users\boula\PRAKTIKUMSIM2REAL\Practicum_sim2real\DataSet_Augmentation\2.Training_Augmentation\outputCORRECT'  
+output_folder = r'C:\Users\boula\PRAKTIKUMSIM2REAL\Practicum_sim2real\DataSet_Augmentation\2.Training_Augmentation\recordsIMAGES'  
 json_record_path = os.path.join(output_folder, "augmentation_records.json")  # Path for the JSON record
 
 # Ensure the output directory exists
@@ -136,13 +136,12 @@ def is_valid_image(img, min_threshold=10, max_threshold=245):
         return False
     return True
 
-# Augmentation Pipeline with JSON Records
-def augment_images_with_json(input_folder, output_folder, json_record_path):
+def augment_images_with_individual_json(input_folder, output_folder):
     perturbations = [
-        gaussian_noise, poisson_noise, impulse_noise, defocus_blur, 
-        # Add other perturbation functions here...
-    ]
-    augmentation_records = {}
+        gaussian_noise, poisson_noise, impulse_noise, defocus_blur, glass_blur,
+        motion_blur, zoom_blur, increase_brightness, contrast, pixelate,
+        jpeg_filter, elastic, shear_image, grayscale_filter
+    ]  # Ensure you have the correct number of perturbations
 
     for root, _, files in os.walk(input_folder):
         for file in files:
@@ -152,36 +151,35 @@ def augment_images_with_json(input_folder, output_folder, json_record_path):
                 if img is None:
                     continue
                 
-                img = clamp_and_convert(img)  # Ensure uint8 format
+                img = np.clip(img, 0, 255).astype(np.uint8)  # Ensure uint8 format
+                original_name = os.path.splitext(file)[0]
+                json_records = []
 
-                # Sample perturbations without exceeding the available options
-                selected = random.sample(perturbations, min(random.randint(3, 5), len(perturbations)))
-                augmented_files = []
-
+                # Adjust the number of perturbations sampled to not exceed the list size
+                num_perturbations = min(len(perturbations), random.randint(3, 5))
+                selected = random.sample(perturbations, num_perturbations)
+                
                 for perturbation in selected:
                     scale = random.randint(0, 4)
                     augmented_img = perturbation(scale, img)
-
-                    # Validate augmented image
                     if not is_valid_image(augmented_img):
-                        print(f"Invalid image discarded (black/white): {file}")
                         continue
-
-                    # Save the valid augmented image
-                    new_file_name = f"aug_{file}"
-                    output_path = os.path.join(output_folder, new_file_name)
+                    
+                    # Save augmented image
+                    aug_name = f"{original_name}_{perturbation.__name__}.png"
+                    output_path = os.path.join(output_folder, aug_name)
                     cv2.imwrite(output_path, augmented_img)
-                    augmented_files.append(new_file_name)
-                    print(f"Saved valid image: {output_path}")
+
+                    # Add record to JSON
+                    json_records.append(aug_name)
                 
-                # Update JSON record
-                augmentation_records[file] = augmented_files
+                # Save JSON file for this image
+                json_path = os.path.join(output_folder, f"{original_name}_record.json")
+                with open(json_path, 'w') as json_file:
+                    json.dump({file: json_records}, json_file, indent=4)
 
-    # Save JSON records
-    with open(json_record_path, 'w') as json_file:
-        json.dump(augmentation_records, json_file, indent=4)
-        print(f"JSON record saved at: {json_record_path}")
+                print(f"Processed and saved records for: {file}")
 
-# Run the Augmentation
-augment_images_with_json(input_folder, output_folder, json_record_path)
-
+# Run the augmentation process
+augment_images_with_individual_json(input_folder, output_folder)
+print("Augmentation process completed.")
