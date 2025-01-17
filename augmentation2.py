@@ -2,134 +2,171 @@ import os
 import cv2
 import numpy as np
 import random
-import json
 
-# Paths
-input_folder = r'C:\Users\boula\PRAKTIKUMSIM2REAL\Practicum_sim2real\content\logs\collected_sim_no_obstacles'
-output_folder = r'C:\Users\boula\PRAKTIKUMSIM2REAL\Practicum_sim2real\DataSet_Augmentation\2.Training_Augmentation\Output_Folder_2.training'
+# Paths (PLEASE CHANGE THE OUTPUT PATH to a path of your output folder)
+input_folder = r'C:\Users\boula\PRAKTIKUMSIM2REAL\Practicum_sim2real\content\logs\collected_sim_no_obstacles'  
+output_folder = r'C:\Users\boula\PRAKTIKUMSIM2REAL\Practicum_sim2real\DataSet_Augmentation\2.Training_Augmentation\output-Folder2'  
 
-# Ensure output directory exists
+# only to ensure the output directory exists
 os.makedirs(output_folder, exist_ok=True)
 
-# Perturbation Functions
-def fog_filter(scale, img):
-    fog = np.random.normal(200, scale * 10, img.shape).astype('uint8')
-    return cv2.addWeighted(img, 0.7, fog, 0.3, 0)
+# Helper Function to Clamp and Convert
+def clamp_and_convert(img):
+    return np.clip(img, 0, 255).astype(np.uint8)
 
-def frost_filter(scale, img):
-    frost_overlay = np.zeros_like(img, dtype='uint8')
-    frost_points = np.random.randint(0, img.shape[0], (scale * 50, 2))
-    for point in frost_points:
-        cv2.circle(frost_overlay, tuple(point), radius=scale * 2, color=(255, 255, 255), thickness=-1)
-    return cv2.addWeighted(img, 0.8, frost_overlay, 0.2, 0)
+# Perturbation Functions (15 total)
+def gaussian_noise(scale, img):
+    factor = [0.03, 0.06, 0.12, 0.18, 0.22][scale]
+    x = img.astype(np.float32) / 255.0
+    noisy = x + np.random.normal(size=x.shape, scale=factor)
+    return clamp_and_convert(noisy * 255)
 
-def rain_effect(scale, img):
-    rain = np.zeros_like(img, dtype='uint8')
-    num_drops = 100 * scale
-    for _ in range(num_drops):
-        x1, y1 = np.random.randint(0, img.shape[1]), np.random.randint(0, img.shape[0])
-        x2, y2 = x1 + np.random.randint(-5, 5), y1 + np.random.randint(10, 20)
-        cv2.line(rain, (x1, y1), (x2, y2), (200, 200, 200), 1)
-    return cv2.addWeighted(img, 0.8, rain, 0.2, 0)
+def poisson_noise(scale, img):
+    factor = [120, 105, 87, 55, 30][scale]
+    x = img.astype(np.float32) / 255.0
+    noisy = np.random.poisson(x * factor) / factor
+    return clamp_and_convert(noisy * 255)
 
-def lens_distortion(scale, img):
+def impulse_noise(scale, img):
+    factor = [0.01, 0.02, 0.04, 0.065, 0.10][scale]
+    img = img.copy()
+    num_salt = int(factor * img.size * 0.5)
+    coords = [np.random.randint(0, i - 1, num_salt) for i in img.shape[:2]]
+    img[tuple(coords)] = 255
+    num_pepper = int(factor * img.size * 0.5)
+    coords = [np.random.randint(0, i - 1, num_pepper) for i in img.shape[:2]]
+    img[tuple(coords)] = 0
+    return img
+
+def defocus_blur(scale, img):
+    factor = [2, 5, 6, 9, 12][scale]
+    kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (factor, factor))
+    return clamp_and_convert(cv2.filter2D(img, -1, kernel))
+
+def glass_blur(scale, img):
+    factor = [2, 5, 6, 9, 12][scale]
     height, width = img.shape[:2]
-    K = np.array([[width, 0, width / 2],
-                  [0, height, height / 2],
-                  [0, 0, 1]])
-    D = np.array([scale * -0.01, scale * 0.01, 0, 0])
-    return cv2.undistort(img, K, D)
+    for _ in range(factor):
+        rand_x = np.clip(np.random.randint(-1, 2, (height, width)) + np.arange(width), 0, width - 1)
+        rand_y = np.clip(np.random.randint(-1, 2, (height, width)) + np.arange(height)[:, None], 0, height - 1)
+        img = img[rand_y, rand_x]
+    return img
 
-def camera_shake(scale, img):
-    height, width = img.shape[:2]
-    M = np.float32([[1, 0.1 * scale, 0], [0.1 * scale, 1, 0]])
-    return cv2.warpAffine(img, M, (width, height))
+def motion_blur(scale, img):
+    size = [2, 4, 6, 8, 10][scale]
+    kernel = np.zeros((size, size))
+    kernel[int(size / 2), :] = np.ones(size)
+    kernel = kernel / size
+    return clamp_and_convert(cv2.filter2D(img, -1, kernel))
 
-def shadow_overlay(scale, img):
-    shadow = np.zeros_like(img)
-    x1, y1 = np.random.randint(0, img.shape[1]), 0
-    x2, y2 = np.random.randint(0, img.shape[1]), img.shape[0]
-    cv2.rectangle(shadow, (x1, y1), (x2, y2), (50, 50, 50), -1)
-    return cv2.addWeighted(img, 0.8, shadow, 0.2, 0)
-
-def perspective_warp(scale, img):
-    height, width = img.shape[:2]
-    src = np.float32([[0, 0], [width, 0], [0, height], [width, height]])
-    dst = src + np.random.uniform(-scale * 5, scale * 5, src.shape).astype(np.float32)
-    M = cv2.getPerspectiveTransform(src, dst)
-    return cv2.warpPerspective(img, M, (width, height))
+def zoom_blur(scale, img):
+    scale_factors = [1.01, 1.1, 1.2, 1.3, 1.4][scale]
+    zoomed = cv2.resize(img, None, fx=scale_factors, fy=scale_factors, interpolation=cv2.INTER_LINEAR)
+    center = tuple(np.array(zoomed.shape[:2]) // 2)
+    crop = tuple(np.array(img.shape[:2]) // 2)
+    return zoomed[center[0] - crop[0]:center[0] + crop[0], center[1] - crop[1]:center[1] + crop[1]]
 
 def increase_brightness(scale, img):
-    return np.clip(img + scale * 50, 0, 255).astype(np.uint8)
+    factor = [1.1, 1.2, 1.3, 1.5, 1.7][scale]
+    hsv = cv2.cvtColor(img, cv2.COLOR_BGR2HSV)
+    hsv[:, :, 2] = np.clip(hsv[:, :, 2] * factor, 0, 255)
+    return cv2.cvtColor(hsv, cv2.COLOR_HSV2BGR)
+
+def contrast(scale, img):
+    factor = [1.1, 1.2, 1.3, 1.5, 1.7][scale]
+    pivot = 127.5
+    return clamp_and_convert(pivot + (img - pivot) * factor)
+
+def pixelate(scale, img):
+    factor = [0.85, 0.55, 0.35, 0.2, 0.1][scale]
+    h, w = img.shape[:2]
+    temp = cv2.resize(img, (int(w * factor), int(h * factor)), interpolation=cv2.INTER_AREA)
+    return cv2.resize(temp, (w, h), interpolation=cv2.INTER_NEAREST)
+
+def jpeg_filter(scale, img):
+    quality = [95, 75, 50, 30, 10][scale]
+    _, encoded = cv2.imencode('.jpg', img, [int(cv2.IMWRITE_JPEG_QUALITY), quality])
+    return cv2.imdecode(encoded, cv2.IMREAD_COLOR)
+
+def elastic(scale, img):
+    alpha, sigma = [(2, 0.4), (3, 0.75), (5, 0.9), (7, 1.2), (10, 1.5)][scale]
+    dx = cv2.GaussianBlur((np.random.rand(*img.shape[:2]) * 2 - 1) * alpha, (7, 7), sigma)
+    dy = cv2.GaussianBlur((np.random.rand(*img.shape[:2]) * 2 - 1) * alpha, (7, 7), sigma)
+    x, y = np.meshgrid(np.arange(img.shape[1]), np.arange(img.shape[0]))
+    map_x = (x + dx).astype(np.float32)
+    map_y = (y + dy).astype(np.float32)
+    return cv2.remap(img, map_x, map_y, interpolation=cv2.INTER_LINEAR, borderMode=cv2.BORDER_REFLECT)
+
+def shear_image(scale, img):
+    shear_factor = [0.1, 0.2, 0.3, 0.4, 0.5][scale]
+    M = np.array([[1, shear_factor, 0], [0, 1, 0]], dtype=np.float32)
+    return clamp_and_convert(cv2.warpAffine(img, M, (img.shape[1], img.shape[0])))
+
+def grayscale_filter(scale, img):
+    severity = [0.1, 0.2, 0.3, 0.4, 0.5][scale]
+    gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+    gray_rgb = cv2.cvtColor(gray, cv2.COLOR_GRAY2BGR)
+    return cv2.addWeighted(img, 1 - severity, gray_rgb, severity, 0)
+
+# Validation Function
+def is_valid_image(img, min_threshold=10, max_threshold=245):
+    """
+    Validates the augmented image to ensure it is not black, white, or unusable.
+    - img: Input image (numpy array).
+    - min_threshold: Minimum mean intensity for a valid image.
+    - max_threshold: Maximum mean intensity for a valid image.
+    Returns:
+        - bool: True if the image is valid, False otherwise.
+    """
+    mean_intensity = np.mean(img)
+    std_deviation = np.std(img)
+
+    # Check for black images (low mean intensity)
+    if mean_intensity < min_threshold:
+        return False
+
+    # Check for white images (high mean intensity)
+    if mean_intensity > max_threshold:
+        return False
+
+    # Check for nonsensical images (low variation)
+    if std_deviation < min_threshold:
+        return False
+
+    # Image is valid
+    return True
 
 # Augmentation Pipeline
-def augment_image(image_path, output_folder, name_mapping):
-    image = cv2.imread(image_path)
-    if image is None:
-        raise FileNotFoundError(f"Unable to read image: {image_path}")
-
+def augment_images(input_folder, output_folder):
     perturbations = [
-        ("fog", fog_filter),
-        ("frost", frost_filter),
-        ("rain", rain_effect),
-        ("lens_distortion", lens_distortion),
-        ("camera_shake", camera_shake),
-        ("shadow", shadow_overlay),
-        ("perspective", perspective_warp),
-        ("brightness", increase_brightness),
+        gaussian_noise, poisson_noise, impulse_noise, defocus_blur, glass_blur,
+        motion_blur, zoom_blur, increase_brightness, contrast, pixelate,
+        jpeg_filter, elastic, shear_image, grayscale_filter
     ]
-
-    # Randomly select and apply perturbations
-    num_perturbations = random.randint(3, 5)
-    selected_perturbations = random.sample(perturbations, k=num_perturbations)
-
-    base_name = os.path.splitext(os.path.basename(image_path))[0]
-    for i, (suffix, perturbation) in enumerate(selected_perturbations):
-        scale = random.randint(1, 3)  # Randomize scale for each perturbation
-        perturbed_image = perturbation(scale, image)
-
-        new_name = f"{base_name}_{suffix}_{i}.png"
-        augmented_image_path = os.path.join(output_folder, new_name)
-        cv2.imwrite(augmented_image_path, perturbed_image)
-
-        name_mapping[f"{base_name}.png"] = new_name
-
-# Update JSON Files
-def update_json_files(input_folder, output_folder, name_mapping):
-    for root, _, files in os.walk(input_folder):
-        for file in files:
-            if file.lower().endswith('.json'):
-                input_json_path = os.path.join(root, file)
-                output_json_path = os.path.join(output_folder, file)
-
-                with open(input_json_path, 'r') as f:
-                    data = json.load(f)
-
-                if isinstance(data, dict):
-                    for key, value in data.items():
-                        if value in name_mapping:
-                            data[key] = name_mapping[value]
-                elif isinstance(data, list):
-                    data = [name_mapping.get(item, item) for item in data]
-
-                with open(output_json_path, 'w') as f:
-                    json.dump(data, f, indent=4)
-
-                print(f"Updated JSON file: {output_json_path}")
-
-# Main Workflow
-def augment_and_prepare_dataset(input_folder, output_folder):
-    name_mapping = {}
-
     for root, _, files in os.walk(input_folder):
         for file in files:
             if file.lower().endswith(('.png', '.jpg', '.jpeg')):
                 image_path = os.path.join(root, file)
-                print(f"Augmenting image: {image_path}")
-                augment_image(image_path, output_folder, name_mapping)
+                img = cv2.imread(image_path)
+                if img is None:
+                    continue
+                
+                img = clamp_and_convert(img)  # Ensure uint8 format
+                selected = random.sample(perturbations, random.randint(3, 5))
+                for perturbation in selected:
+                    scale = random.randint(0, 4)
+                    img = perturbation(scale, img)
+                
+                # Validate the augmented image
+                if not is_valid_image(img):
+                    print(f"Invalid image discarded (black/white): {file}")
+                    continue
+                
+                # Save the valid augmented image
+                output_path = os.path.join(output_folder, f"aug_{file}")
+                cv2.imwrite(output_path, img)
+                print(f"Saved valid image: {output_path}")
 
-    update_json_files(input_folder, output_folder, name_mapping)
-    print(f"Final dataset prepared in: {output_folder}")
+# Run the Augmentation
+augment_images(input_folder, output_folder)
 
-# Run the Workflow
-augment_and_prepare_dataset(input_folder, output_folder)
