@@ -40,11 +40,6 @@ def impulse_noise(scale, img):
     img[tuple(coords)] = 0
     return img
 
-def defocus_blur(scale, img):
-    factor = [2, 5, 6, 9, 12][scale]
-    kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (factor, factor))
-    return clamp_and_convert(cv2.filter2D(img, -1, kernel))
-
 def glass_blur(scale, img):
     factor = [2, 5, 6, 9, 12][scale]
     height, width = img.shape[:2]
@@ -138,7 +133,7 @@ def is_valid_image(img, min_threshold=10, max_threshold=245):
 
 def augment_images_with_individual_json(input_folder, output_folder):
     perturbations = [
-        gaussian_noise, poisson_noise, impulse_noise, defocus_blur, glass_blur,
+        gaussian_noise, poisson_noise, impulse_noise, glass_blur,
         motion_blur, zoom_blur, increase_brightness, contrast, pixelate,
         jpeg_filter, elastic, shear_image, grayscale_filter
     ]  # Ensure you have the correct number of perturbations
