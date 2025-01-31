@@ -148,13 +148,6 @@ def directional_motion_blur(scale, img):
     kernel /= kernel.sum()
     return cv2.filter2D(img, -1, kernel)
 
-def overexposure_glare(scale, img):
-    """Simulates sunlight glare on camera sensors."""
-    factor = [1.3, 1.5, 1.7, 2.0, 2.5][scale]
-    hsv = cv2.cvtColor(img, cv2.COLOR_BGR2HSV)
-    hsv[:, :, 2] = np.clip(hsv[:, :, 2] * factor, 0, 255)
-    return cv2.cvtColor(hsv, cv2.COLOR_HSV2BGR)
-
 # --- Image Validation 
 def is_valid_image(img, min_threshold=10, max_threshold=245):
     mean_intensity = np.mean(img)
@@ -164,10 +157,10 @@ def is_valid_image(img, min_threshold=10, max_threshold=245):
     return True
 
 # --- Augmentation Execution (Using Only the 5 New Perturbations) 
+#for the training you can apply all of them but first test these 4 new perturbations.
 def augment_images_with_individual_json(input_folder, output_folder):
     perturbations = [#gaussian_noise, poisson_noise, impulse_noise, defocus_blur, glass_blur, motion_blur, zoom_blur, increase_brightness, contrast, pixelate, jpeg_filter, elastic, shear_image, grayscale_filter 
-      #for the training you can apply all of them but first test these 5 new perturbations.
-      radial_distortion, add_shadow, perspective_warp, directional_motion_blur, overexposure_glare] 
+      radial_distortion, add_shadow, perspective_warp, directional_motion_blur] 
 
     for root, _, files in os.walk(input_folder):
         for file in files:
