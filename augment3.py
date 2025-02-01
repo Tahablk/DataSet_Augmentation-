@@ -106,8 +106,10 @@ def grayscale_filter(scale, img):
     gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
     gray_rgb = cv2.cvtColor(gray, cv2.COLOR_GRAY2BGR)
     return cv2.addWeighted(img, 1 - severity, gray_rgb, severity, 0)
+
+
   
-# 5 new perturbations
+# 4 NEW PERTURBATIONS
 def radial_distortion(scale, img):
     """Simulates fish-eye effect for distorted perspectives."""
     h, w = img.shape[:2]
@@ -148,6 +150,8 @@ def directional_motion_blur(scale, img):
     kernel /= kernel.sum()
     return cv2.filter2D(img, -1, kernel)
 
+
+
 # --- Image Validation 
 def is_valid_image(img, min_threshold=10, max_threshold=245):
     mean_intensity = np.mean(img)
@@ -157,7 +161,7 @@ def is_valid_image(img, min_threshold=10, max_threshold=245):
     return True
 
 # --- Augmentation Execution (Using Only the 5 New Perturbations) 
-#for the training you can apply all of them but first test these 4 new perturbations.
+#!!!for the training you can apply all of them but first test these 4 new perturbations. 
 def augment_images_with_individual_json(input_folder, output_folder):
     perturbations = [#gaussian_noise, poisson_noise, impulse_noise, defocus_blur, glass_blur, motion_blur, zoom_blur, increase_brightness, contrast, pixelate, jpeg_filter, elastic, shear_image, grayscale_filter 
       radial_distortion, add_shadow, perspective_warp, directional_motion_blur] 
