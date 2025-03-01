@@ -6,13 +6,17 @@ import json
 
 # Paths
 input_folder = r'C:\collected_sim_no_obstacles' # Change this to the folder containing your images
-output_folder = r'C:\Users\boula\DataSet_Augmentation-\AUGMENT3OUTPUT' # Change this to the folder where you want to save the augmented images
+output_folder = r'C:\Users\boula\DataSet_Augmentation-\Augment_Final_Training' # Change this to the folder where you want to save the augmented images
 
 os.makedirs(output_folder, exist_ok=True)
+
 
 # Helper Function 
 def clamp_and_convert(img):
     return np.clip(img, 0, 255).astype(np.uint8)
+
+
+# Perturbation Functions (PerturbationDrive)
 
 def gaussian_noise(scale, img):
     factor = [0.03, 0.06, 0.12, 0.18, 0.22][scale]
@@ -36,11 +40,6 @@ def impulse_noise(scale, img):
     coords = [np.random.randint(0, i - 1, num_pepper) for i in img.shape[:2]]
     img[tuple(coords)] = 0
     return img
-
-def defocus_blur(scale, img):
-    factor = [2, 5, 6, 9, 12][scale]
-    kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (factor, factor))
-    return clamp_and_convert(cv2.filter2D(img, -1, kernel))
 
 def glass_blur(scale, img):
     factor = [2, 5, 6, 9, 12][scale]
@@ -106,12 +105,12 @@ def grayscale_filter(scale, img):
     gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
     gray_rgb = cv2.cvtColor(gray, cv2.COLOR_GRAY2BGR)
     return cv2.addWeighted(img, 1 - severity, gray_rgb, severity, 0)
-
-
   
-# 4 NEW PERTURBATIONS
+
+
+# 4 new perturbations (not present in the original PerturbationDrive)
 def radial_distortion(scale, img):
-    """Simulates fish-eye effect for distorted perspectives."""
+    """Simulates fish-eye effect for distorted perspectives. Radial distortion prevents misinterpretation of curved road sections due to camera distortions"""
     h, w = img.shape[:2]
     dist_coeff = [0.02, 0.04, 0.06, 0.08, 0.10][scale]
     K = np.array([[w, 0, w//2], [0, w, h//2], [0, 0, 1]])
@@ -120,7 +119,7 @@ def radial_distortion(scale, img):
     return cv2.remap(img, map1, map2, interpolation=cv2.INTER_LINEAR)
 
 def add_shadow(scale, img):
-    """Adds random shadows to simulate real-world lighting variations."""
+    """Adds random shadows to simulate real-world lighting variations. It trains the model to recognize true lane boundaries even under inconsistent lighting"""
     h, w = img.shape[:2]
     mask = np.zeros_like(img, dtype=np.uint8)
     shadow_intensity = [0.3, 0.4, 0.5, 0.6, 0.7][scale]
@@ -130,7 +129,7 @@ def add_shadow(scale, img):
     return cv2.addWeighted(img, 1, mask, -shadow_intensity, 0)
 
 def perspective_warp(scale, img):
-    """Applies perspective distortion to simulate extreme turning angles."""
+    """Applies perspective distortion to simulate extreme turning angles.(training on this perturbation ensures accurate lane detection during sharp turns) """
     h, w = img.shape[:2]
     shift = [5, 10, 15, 20, 25][scale]
     src_pts = np.float32([[0, 0], [w, 0], [0, h], [w, h]])
@@ -139,7 +138,7 @@ def perspective_warp(scale, img):
     return cv2.warpPerspective(img, M, (w, h))
 
 def directional_motion_blur(scale, img):
-    """Simulates motion blur in sharp turns."""
+    """Simulates motion blur in sharp turns.(more specific to the steep angle problem) """
     size = [5, 10, 15, 20, 25][scale]
     kernel = np.zeros((size, size))
     angle = np.random.choice([0, 45, 90, 135])
@@ -151,7 +150,6 @@ def directional_motion_blur(scale, img):
     return cv2.filter2D(img, -1, kernel)
 
 
-
 # --- Image Validation 
 def is_valid_image(img, min_threshold=10, max_threshold=245):
     mean_intensity = np.mean(img)
@@ -160,11 +158,13 @@ def is_valid_image(img, min_threshold=10, max_threshold=245):
         return False
     return True
 
-# --- Augmentation Execution (Using Only the 5 New Perturbations) 
-#!!!for the training you can apply all of them but first test these 4 new perturbations. 
+
+# --- Augmentation Execution (Using Only the 4 New Perturbations) 
+# for this final training we will use the 14 perturbations of the 2.training and also the 4 new perturbations (18 Total)
 def augment_images_with_individual_json(input_folder, output_folder):
-    perturbations = [#gaussian_noise, poisson_noise, impulse_noise, defocus_blur, glass_blur, motion_blur, zoom_blur, increase_brightness, contrast, pixelate, jpeg_filter, elastic, shear_image, grayscale_filter 
-      radial_distortion, add_shadow, perspective_warp, directional_motion_blur] 
+    perturbations = [gaussian_noise, poisson_noise, impulse_noise, glass_blur, 
+        motion_blur, zoom_blur, increase_brightness, contrast, pixelate, jpeg_filter, elastic, shear_image, grayscale_filter,
+          radial_distortion, add_shadow, perspective_warp, directional_motion_blur] 
 
     for root, _, files in os.walk(input_folder):
         for file in files:
@@ -212,6 +212,7 @@ def augment_images_with_individual_json(input_folder, output_folder):
                     json.dump(existing_records, json_file, indent=4)
 
                 print(f"Processed and saved images & records for: {file}")
+
 
 # Run the augmentation process
 augment_images_with_individual_json(input_folder, output_folder)
