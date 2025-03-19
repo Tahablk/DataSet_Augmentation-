@@ -6,7 +6,7 @@ import json
 
 # Paths
 input_folder = r'C:\collected_sim_no_obstacles' #input folder
-output_folder = r'D:\augment4_StrongPerturbations' #output images and records (adapt it to yours as always)
+output_folder = r'D:\augment4_StrongPerturbations' #output images and records
 os.makedirs(output_folder, exist_ok=True)
 
 # Helper function to clamp pixel values
