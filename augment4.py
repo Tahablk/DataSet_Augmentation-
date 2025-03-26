@@ -13,7 +13,7 @@ os.makedirs(output_folder, exist_ok=True)
 def clamp_and_convert(img):
     return np.clip(img, 0, 255).astype(np.uint8)
 
-### --- 18 PERTURBATIONS (some were removed/made stronger) --- ###
+### --- 12 PERTURBATIONS (some were removed/made stronger) --- ###
 def gaussian_noise(scale, img):
     factor = [0.05, 0.1, 0.2, 0.3, 0.4][scale]
     noisy = img.astype(np.float32) / 255.0 + np.random.normal(size=img.shape, scale=factor)
